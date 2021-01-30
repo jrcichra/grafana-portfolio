@@ -10,6 +10,9 @@ services:
     volumes:
       - $PWD/portfolio_data:/config
     restart: unless-stopped
+    #debug
+    ports:
+      - 3333:3306
   grafana:
     image: grafana/grafana
     restart: unless-stopped
@@ -21,8 +24,10 @@ services:
     depends_on:
       - mariadb
   collector:
-    image: jrcichra/grafana-portfolio
+    # image: jrcichra/grafana-portfolio
+    build: .
     volumes:
-      - $PWD/portfolio.yml:/app/portfolio.yml
+      # - $PWD/portfolio.yml:/app/portfolio.yml
+      - $PWD/portfolio-real.yml:/app/portfolio.yml
     depends_on:
       - mariadb
