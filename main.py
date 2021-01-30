@@ -1,60 +1,62 @@
+import pymysql.cursors
 import yfinance as yf
+import yaml
 
-msft = yf.Ticker("MSFT")
 
-# get stock info
-msft.info
+class Portfolio:
+    def __init__(self):
+        super().__init__()
 
-# get historical market data
-hist = msft.history(period="max")
+    def connect_to_database(self, password='test'):
+        self.connection = pymysql.connect(host='mariadb',
+                                          user='root',
+                                          password=password,
+                                          database='stocks',
+                                          cursorclass=pymysql.cursors.DictCursor)
 
-# show actions (dividends, splits)
-msft.actions
+    def create_ticker_table(self, ticker):
+        create = f"""
+            CREATE TABLE stocks.{ticker.lower()} (
+                `date` DATETIME,
+                open float,
+                high float,
+                low float,
+                close float,
+                adjclose float,
+                volume float
+            )
+        """
+        with self.connection.cursor() as cursor:
+            cursor.execute(create)
+            self.connection.commit()
 
-# show dividends
-msft.dividends
+    def read(self):
+        with open("/app/portfolio.yml", "r") as portfolio_file:
+            # get yml
+            self.portfolio = yaml.load(portfolio_file, Loader=yaml.FullLoader)
 
-# show splits
-msft.splits
+    def populate(self):
+        # generate unique hash of tickers
+        tickers = {}
+        for account in self.portfolio["accounts"]:
+            for ticker in self.portfolio["accounts"][account].keys():
+                tickers[ticker] = 1
 
-# show financials
-msft.financials
-msft.quarterly_financials
+        # gather historical data for all tickers in portfolio
+        print(f"Gathering data for {','.join(list(tickers.keys()))}...")
+        data = yf.download(tickers=list(tickers.keys()),
+                           period="7d", group_by="ticker")
+        # each day
+        for date, row in data.iterrows():
+            for ticker, row2 in row.groupby(level=0):
+                # print(f"a={a}")
+                # print(row2[ticker]["Open"])
+                metrics = row2[ticker]
+                insert = f"INSERT INTO stocks.{ticker.lower()} (`date`,open,high,low,close,adjclose,volume) VALUES ('{date}',{metrics['Open']},{metrics['High']},{metrics['Low']},{metrics['Close']},{metrics['Adj Close']},{metrics['Volume']})"
+                print(insert)
 
-# show major holders
-msft.major_holders
 
-# show institutional holders
-msft.institutional_holders
-
-# show balance sheet
-msft.balance_sheet
-msft.quarterly_balance_sheet
-
-# show cashflow
-msft.cashflow
-msft.quarterly_cashflow
-
-# show earnings
-msft.earnings
-msft.quarterly_earnings
-
-# show sustainability
-msft.sustainability
-
-# show analysts recommendations
-msft.recommendations
-
-# show next event (earnings, etc)
-msft.calendar
-
-# show ISIN code - *experimental*
-# ISIN = International Securities Identification Number
-msft.isin
-
-# show options expirations
-msft.options
-
-# get option chain for specific expiration
-opt = msft.option_chain('YYYY-MM-DD')
-# data available via: opt.calls, opt.puts
+if __name__ == "__main__":
+    p = Portfolio()
+    p.read()
+    p.populate()

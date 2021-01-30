@@ -4,6 +4,8 @@ services:
     image: jrcichra/grafana-portfolio
     container_name: collector
     restart: unless-stopped
+    volumes:
+      - $PWD/portfolio.yml:/app/portfolio.yml
   mariadb:
     image: ghcr.io/linuxserver/mariadb
     container_name: mariadb
