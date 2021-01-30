@@ -1,14 +1,7 @@
 version: "3"
 services:
-  collector:
-    image: jrcichra/grafana-portfolio
-    container_name: collector
-    restart: unless-stopped
-    volumes:
-      - $PWD/portfolio.yml:/app/portfolio.yml
   mariadb:
     image: ghcr.io/linuxserver/mariadb
-    container_name: mariadb
     environment:
       - PUID=1000
       - PGID=1000
@@ -19,9 +12,18 @@ services:
     restart: unless-stopped
   grafana:
     image: grafana/grafana
-    container_name: grafana
     restart: unless-stopped
+    user: "1000"
     volumes:
       - $PWD/grafana:/var/lib/grafana
     ports:
       - 3000:3000
+    depends_on:
+      - mariadb
+  collector:
+    # image: jrcichra/grafana-portfolio
+    build: .
+    volumes:
+      - $PWD/portfolio.yml:/app/portfolio.yml
+    depends_on:
+      - mariadb
