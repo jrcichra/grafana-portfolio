@@ -1,0 +1,25 @@
+version: "3"
+services:
+  collector:
+    image: jrcichra/grafana-portfolio
+    container_name: collector
+    restart: unless-stopped
+  mariadb:
+    image: ghcr.io/linuxserver/mariadb
+    container_name: mariadb
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - MYSQL_ROOT_PASSWORD=test
+      - TZ=America/New_York
+    volumes:
+      - $PWD/portfolio_data:/config
+    restart: unless-stopped
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    restart: unless-stopped
+    volumes:
+      - $PWD/grafana:/var/lib/grafana
+    ports:
+      - 3000:3000

@@ -1,0 +1,6 @@
+accounts:
+  brokerage:
+    DIA:
+      - date: 03/09/2020
+        price: 242.50
+        shares: 25
