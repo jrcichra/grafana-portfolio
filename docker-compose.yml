@@ -10,6 +10,9 @@ services:
     volumes:
       - $PWD/portfolio_data:/config
     restart: unless-stopped
+    #debug
+    ports:
+      - 3333:3306
   grafana:
     image: grafana/grafana
     restart: unless-stopped

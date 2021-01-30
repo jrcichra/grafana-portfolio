@@ -1,10 +1,10 @@
 accounts:
   brokerage:
     DIA:
-      - date: 03/09/2020
+      - date: 03-09-2020
         price: 242.50
         shares: 40
     GME:
-      - date: 01/25/2021
+      - date: 01-25-2021
         price: 113.55
         shares: 20

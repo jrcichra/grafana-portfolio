@@ -4,6 +4,9 @@ import yaml
 import inotify.adapters
 import threading
 import time
+import re
+import dateparser
+import datetime
 
 
 class Portfolio:
@@ -21,21 +24,26 @@ class Portfolio:
                                           cursorclass=pymysql.cursors.DictCursor)
 
     def sql(self, stmt):
+        ret = None
         try:
             with self.connection.cursor() as cursor:
                 cursor.execute(stmt)
+                ret = self.connection.insert_id()
                 self.connection.commit()
         except Exception as e:
+            print(f"Failed to execute: {stmt}")
             print(e)
+        return ret
 
-    def create_ticker_tables(self):
+    def create_tables(self):
         self.sql("CREATE DATABASE stocks")
         for ticker in self.tickers.keys():
             ticker = ticker.lower()
-            create = f"""
-                CREATE TABLE stocks.{ticker} (
+            tick = f"""
+                CREATE TABLE stocks.tickers (
                     id bigint primary key auto_increment,
-                    `date` DATETIME UNIQUE,
+                    `date` DATETIME not null,
+                    ticker varchar(10) not null,
                     open float,
                     high float,
                     low float,
@@ -44,12 +52,37 @@ class Portfolio:
                     volume float
                 )
             """
-            self.sql(create)
-            index = f"""
-                CREATE INDEX stocks_{ticker}_idx
-                ON stocks.{ticker} (`date`)
+            self.sql(tick)
+            index1 = f"""
+                CREATE INDEX stocks_tickers_date_idx
+                ON stocks.tickers (`date`)
             """
-            self.sql(index)
+            self.sql(index1)
+            index2 = f"""
+                CREATE INDEX stocks_tickers_ticker_idx
+                ON stocks.tickers (`ticker`)
+            """
+            self.sql(index2)
+            acc = f"""
+                CREATE TABLE stocks.accounts (
+                    id bigint primary key auto_increment,
+                    name varchar(255) not null
+                )
+            """
+            self.sql(acc)
+            lots = f"""
+                CREATE TABLE stocks.lots (
+                    id bigint primary key auto_increment,
+                    account_id bigint not null,
+                    ticker varchar(10) not null,
+                    `date` datetime not null,
+                    price float not null,
+                    shares float not null,
+                    foreign key (account_id)
+                    references stocks.accounts(id)
+                )
+            """
+            self.sql(lots)
 
     def read(self):
         with open(self.portfolio_path, "r") as portfolio_file:
@@ -63,17 +96,38 @@ class Portfolio:
 
     def populate(self):
 
+        # clear out all portfolio data
+        self.sql("delete from stocks.accounts")
+        self.sql("delete from stocks.lots")
+
         # gather historical data for all tickers in portfolio
         print(f"Gathering data for {','.join(list(self.tickers.keys()))}...")
         data = yf.download(tickers=list(self.tickers.keys()),
-                           period="7d", group_by="ticker")
+                           period="7d", group_by="ticker", interval="1m")
         # each day
         for date, row in data.iterrows():
+            # remove timezone if it has it
+            date = re.sub(r'-\d+:\d+$', '', str(date))
             for ticker, row2 in row.groupby(level=0):
                 metrics = row2[ticker]
-                insert = f"INSERT INTO stocks.{ticker.lower()} (`date`,open,high,low,close,adjclose,volume) VALUES ('{date}',{metrics['Open']},{metrics['High']},{metrics['Low']},{metrics['Close']},{metrics['Adj Close']},{metrics['Volume']})"
-                print(insert)
+                if str(metrics['Open']) == "nan" or str(metrics['High']) == "nan" or str(metrics['Low']) == "nan" or str(metrics['Close']) == "nan" or str(metrics['Adj Close']) == "nan" or str(metrics['Volume']) == "nan":
+                    continue
+                insert = f"INSERT INTO stocks.tickers (`date`,ticker,open,high,low,close,adjclose,volume) VALUES ('{date}','{ticker.lower()}',{metrics['Open']},{metrics['High']},{metrics['Low']},{metrics['Close']},{metrics['Adj Close']},{metrics['Volume']})"
+                # print(insert)
                 self.sql(insert)
+        # process user's portfolio
+        for account in self.portfolio["accounts"]:
+            account_id = self.sql(
+                f"INSERT INTO stocks.accounts(name) VALUES ('{account}')")
+            for ticker in self.portfolio["accounts"][account].keys():
+                # loop through ticker's lots
+                for lot in self.portfolio["accounts"][account][ticker]:
+                    date = dateparser.parse(lot["date"]).strftime("%Y-%m-%d")
+                    price = lot["price"]
+                    shares = lot["shares"]
+                    self.sql(
+                        f"INSERT INTO stocks.lots (account_id,ticker,`date`,price,shares) VALUES ({account_id},'{ticker}','{date}','{price}','{shares}')")
+        print(f"Finished populating data")
 
 
 def hourly_populate(p, hours):
@@ -97,7 +151,7 @@ if __name__ == "__main__":
     p = Portfolio()
     p.read()
     p.connect_to_database()
-    p.create_ticker_tables()
+    p.create_tables()
     p.populate()
 
     # cron thread

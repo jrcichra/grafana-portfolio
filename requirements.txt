@@ -2,3 +2,4 @@ yfinance
 PyYAML
 PyMySQL
 inotify
+dateparser
